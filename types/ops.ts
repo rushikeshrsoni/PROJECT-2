@@ -6,9 +6,11 @@
 export type IncidentSeverity = 'P0_CRITICAL' | 'P1_HIGH' | 'P2_MEDIUM' | 'P3_LOW';
 
 export type IncidentStatus = 
+  | 'PENDING'
   | 'DETECTED'
-  | 'TRIAGING'
+  | 'ANALYZING'
   | 'ISOLATING'
+  | 'EXECUTING'
   | 'REMEDIATING'
   | 'VERIFYING'
   | 'RESOLVED'
@@ -104,7 +106,7 @@ export interface JudgeEvaluationMetric {
 export interface AuthUser {
   id: string;
   email: string;
-  role: 'Judge/Evaluator' | 'Site Reliability Engineer' | 'SecOps Admin' | 'Cloud Architect';
+  role: 'Judge Evaluator' | 'Judge/Evaluator' | 'Site Reliability Engineer' | 'SecOps Admin' | 'Cloud Architect';
   isDemo: boolean;
   fullName?: string;
   avatarUrl?: string;
@@ -117,4 +119,37 @@ export interface AuthSession {
   token?: string;
   expiresAt?: string;
   isDemo: boolean;
+}
+
+export interface HistoricalIncident {
+  id: string;
+  taskId: string;
+  title: string;
+  description: string;
+  severity: IncidentSeverity;
+  cloudProvider: CloudProvider;
+  region: string;
+  status: IncidentStatus;
+  detectedAt: string;
+  resolvedAt: string;
+  mttrSeconds: number;
+  blastRadiusSaved: number;
+  logsCount: number;
+  steps: {
+    stepNumber: number;
+    stepType: ReActStepType;
+    thought: string;
+    action: string;
+    toolUsed?: string;
+    output: string;
+  }[];
+}
+
+export interface ApiGatewayStatus {
+  service: string;
+  category: 'AI Engine' | 'Database' | 'Cloud Gateway' | 'Security';
+  status: 'ONLINE' | 'DEGRADED' | 'STANDBY';
+  latencyMs: number;
+  uptime: string;
+  region: string;
 }

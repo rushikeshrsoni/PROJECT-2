@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabaseClient';
 import { AuthUser, AuthSession } from '@/types/ops';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -13,6 +14,7 @@ interface AuthContextType {
   isSupabaseLive: boolean;
   loginWithJudgeDemo: () => void;
   loginWithSupabase: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
+  signUpWithSupabase: (email: string, password: string, fullName: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateRole: (role: AuthUser['role']) => void;
 }
@@ -21,12 +23,12 @@ const STORAGE_KEY = 'aetherops_auth_session';
 
 const DEFAULT_JUDGE_USER: AuthUser = {
   id: 'judge-evaluator-demo-01',
-  email: 'evaluator.judge@aetherops.internal',
-  role: 'Judge/Evaluator',
+  email: 'judge.evaluator@aetherops.internal',
+  role: 'Judge Evaluator',
   isDemo: true,
-  fullName: 'Principal Evaluator (Autonomous Systems)',
+  fullName: 'Judge Evaluator (Hackathon / Tech Review)',
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128&auto=format&fit=crop&q=80',
-  organization: 'Cloud Resilience AI Benchmark 2026',
+  organization: 'Cloud Resilience Autonomous Benchmark 2026',
   demoSessionStartedAt: new Date().toISOString(),
 };
 
@@ -127,6 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithJudgeDemo = useCallback(() => {
     const demoUser: AuthUser = {
       ...DEFAULT_JUDGE_USER,
+      role: 'Judge Evaluator',
       demoSessionStartedAt: new Date().toISOString(),
     };
 
@@ -143,6 +146,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(demoSession));
     }
+
+    toast.success('⚡ Judge Evaluator Instant Fast-Pass Activated!', {
+      description: 'Persistent evaluator session loaded with full Level 5 autonomy controls.',
+      duration: 3500,
+    });
   }, []);
 
   /**
@@ -152,7 +160,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       if (!isSupabaseConfigured()) {
-        // Simulated fallback when live Supabase credentials aren't bound yet
         const simulatedUser: AuthUser = {
           id: 'sre-auth-demo-99',
           email,
@@ -171,6 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (typeof window !== 'undefined') {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(simulatedSession));
         }
+        toast.success(`Welcome back, ${simulatedUser.fullName}!`);
         return { success: true };
       }
 
@@ -180,6 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           password,
         });
         if (error) {
+          toast.error(error.message);
           return { success: false, error: error.message };
         }
         if (data.user && data.session) {
@@ -200,18 +209,100 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (typeof window !== 'undefined') {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(newSession));
           }
+          toast.success(`Signed in as ${authUser.fullName}`);
           return { success: true };
         }
       } else {
-        // Magic link
         const { error } = await supabase.auth.signInWithOtp({ email });
-        if (error) return { success: false, error: error.message };
+        if (error) {
+          toast.error(error.message);
+          return { success: false, error: error.message };
+        }
+        toast.info('Magic link sent to your email.');
         return { success: true };
       }
 
       return { success: false, error: 'Authentication could not be completed' };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unexpected login error';
+      toast.error(msg);
+      return { success: false, error: msg };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  /**
+   * Sign Up with Supabase
+   */
+  const signUpWithSupabase = useCallback(async (email: string, password: string, fullName: string): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    try {
+      if (!isSupabaseConfigured()) {
+        const simulatedUser: AuthUser = {
+          id: `user-${Date.now()}`,
+          email,
+          role: 'Site Reliability Engineer',
+          isDemo: false,
+          fullName,
+          organization: 'Aether Cloud Infrastructure',
+        };
+        const simulatedSession: AuthSession = {
+          user: simulatedUser,
+          token: 'jwt-simulated-supabase-jwt-verified',
+          isDemo: false,
+        };
+        setUser(simulatedUser);
+        setSession(simulatedSession);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(simulatedSession));
+        }
+        toast.success(`Account created! Welcome, ${fullName}!`);
+        return { success: true };
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: 'Site Reliability Engineer',
+          },
+        },
+      });
+
+      if (error) {
+        toast.error(error.message);
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        const authUser: AuthUser = {
+          id: data.user.id,
+          email: data.user.email || email,
+          role: 'Site Reliability Engineer',
+          isDemo: false,
+          fullName,
+        };
+        const newSession: AuthSession = {
+          user: authUser,
+          token: data.session?.access_token,
+          isDemo: false,
+        };
+        setUser(authUser);
+        setSession(newSession);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(newSession));
+        }
+        toast.success(`Account successfully registered!`);
+        return { success: true };
+      }
+
+      return { success: false, error: 'Registration incomplete' };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Registration error';
+      toast.error(msg);
       return { success: false, error: msg };
     } finally {
       setIsLoading(false);
@@ -232,6 +323,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (typeof window !== 'undefined') {
         localStorage.removeItem(STORAGE_KEY);
       }
+      toast.info('Signed out of AetherOps AI');
     } finally {
       setIsLoading(false);
     }
@@ -265,6 +357,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isSupabaseLive,
         loginWithJudgeDemo,
         loginWithSupabase,
+        signUpWithSupabase,
         logout,
         updateRole,
       }}
